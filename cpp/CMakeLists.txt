@@ -1,15 +1,40 @@
-cmake_minimum_required(VERSION 3.16)
-project(concurrency_lab_cpp CXX)
-
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE Release)
-endif()
-
 find_package(Threads REQUIRED)
-include_directories(include)
+
+# --- IDE-facing target: every source/header belongs here --------------
+# CLion (and clangd) only index files that are listed as SOURCES of at
+# least one target. Headers pulled in via #include and .cpp files
+# behind a CMake if() guard are invisible to the IDE by default, which
+# is why it shows "file doesn't belong to any target" for them.
+#
+# add_custom_target with SOURCES is the documented workaround: it
+# creates a no-op target (nothing is built, nothing is linked) whose
+# only job is to make every file in the project visible to IDE
+# tooling — go-to-definition, refactoring, error highlighting, etc.
+add_custom_target(lab_ide_sources SOURCES
+    # Headers
+    include/blocking_queue.hpp
+    include/cache.hpp
+    include/cas_counter.hpp
+    include/cas_mpmc_queue.hpp
+    include/dcl_singletons.hpp
+    include/seqlock.hpp
+    include/spin_lock.hpp
+    include/spsc_ring_buffer.hpp
+    tests/test_harness.hpp
+    # Negative-test sources (conditionally compiled below, but always
+    # visible to the IDE via this target)
+    tests/broken_singleton_race.cpp
+    tests/unsafe_publication_race.cpp
+)
+
+# Common include path for every executable below
+function(lab_setup_target target_name)
+    target_include_directories(${target_name} PRIVATE include)
+    target_link_libraries(${target_name} PRIVATE Threads::Threads)
+    add_dependencies(${target_name} lab_ide_sources)
+endfunction()
+
+# --- Demos -----------------------------------------------------------------
 
 set(DEMOS
     mutex_ownership_demo
@@ -28,11 +53,10 @@ set(DEMOS
 
 foreach(demo ${DEMOS})
     add_executable(${demo} src/${demo}.cpp)
-    target_link_libraries(${demo} PRIVATE Threads::Threads)
+    lab_setup_target(${demo})
 endforeach()
 
 # --- Tests ---------------------------------------------------------------
-enable_testing()
 
 set(TESTS
     cas_counter_test
@@ -51,7 +75,7 @@ set(TESTS
 foreach(test_name ${TESTS})
     add_executable(${test_name} tests/${test_name}.cpp)
     target_include_directories(${test_name} PRIVATE tests)
-    target_link_libraries(${test_name} PRIVATE Threads::Threads)
+    lab_setup_target(${test_name})
     add_test(NAME ${test_name} COMMAND ${test_name})
 endforeach()
 
@@ -75,7 +99,7 @@ if(ENABLE_TSAN_NEGATIVE_TESTS)
         add_executable(${neg_test} tests/${neg_test}.cpp)
         target_compile_options(${neg_test} PRIVATE -fsanitize=thread -g -O1)
         target_link_options(${neg_test} PRIVATE -fsanitize=thread)
-        target_link_libraries(${neg_test} PRIVATE Threads::Threads)
+        lab_setup_target(${neg_test})
 
         # Inverted pass/fail semantics, on purpose: this test's CODE is
         # a known bug. It "passes" only when ThreadSanitizer's report

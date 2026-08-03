@@ -2,11 +2,8 @@
 
 A runnable, side-by-side comparison of Java and modern C++ (C++17/20)
 concurrency: memory models, visibility, CAS, safe publication, locks,
-concurrent queues - plus two deep dives (a lock-free SPSC ring buffer,
-and double-checked locking, broken and fixed, in both languages).
+concurrent queues.
 
-Every file has a `main`/`main()` and actually runs. Nothing here is
-pseudocode.
 
 ## What this is
 
@@ -21,18 +18,6 @@ human to see the behavior, the test is what a CI system (or you,
 skimming) should actually trust.
 
 This is meant to be read as a guided tour, not grepped for a snippet.
-Sections 0 through 12 build on each other: Section 1 (memory models)
-is the concept everything after it depends on, Section 3 (negative
-tests) only makes sense once you've seen a broken implementation in
-Section 2, and Section 10's benchmark leans on the CAS mechanics
-introduced in Section 9. If you're only here for one topic, the
-file-by-file table in Section 8 is the fastest way to jump straight to
-the two files that cover it.
-
-Assumed background: comfortable reading at least one of Java or C++;
-no prior concurrency expertise required; the point of this repo is
-that concurrency bugs are subtle enough to deserve a runnable
-side-by-side rather than a slide with "don't do this" on it.
 
 ## Table of contents
 
@@ -60,10 +45,6 @@ flag or opt-in at all - they run automatically as part of the regular
 suite (`make test-java` / `RunAllTests`) - which is itself one of the
 findings Section 3 covers.
 
-Both languages also share the same top-level shape now: demo/library
-code under `src/`, every test (including the negative ones) under
-`tests/`. `java/src/` mirrors `cpp/src/`; `java/tests/` mirrors
-`cpp/tests/`.
 
 ## Building everything at once and running tests
 
@@ -71,24 +52,35 @@ There's a single top-level `Makefile` that wraps both languages' native
 build tools into one project:
 
 ```bash
-make              # build everything: Java classes + C++ binaries
-make test         # run both test suites (10 Java suites, 10 C++ suites)
-make test-java    # run java test suites
-make test-cpp     # builds and runs the CMake/CTest suite
-make test-cpp-negative   # opt-in: the two ThreadSanitizer negative tests too
-make run-demos-java      # run every Java demo's main() in sequence
-make run-demos-cpp       # run every C++ demo binary in sequence
-make clean        # remove all build output from both languages
-make help         # list every target
-make build              # build both languages
-make run-demos-java      # build + run every Java demo's main() in sequence
-make run-demos-cpp       # build + run every C++ demo binary in sequence
-make run-benchmark-java  # run QueueBenchmark (~1-2 min, not part of run-demos-java)
-make run-benchmark-cpp   # run queue_benchmark (~1-2 min, not part of run-demos-cpp)
+make                    # alias for 'make build' (both languages)
+make build              # build Java classes + C++ binaries
+make build-java         # build Java only (mvn compile)
+make build-cpp          # build C++ only (CMake + make)
+make test               # run both test suites
+make test-java          # run the Java suite (mvn exec:java RunAllTests)
+make test-cpp           # build + run the C++ suite (ctest)
+make test-cpp-negative  # opt-in: C++ negative tests under ThreadSanitizer
+make test-java-one T=CasCounterTest    # run a single Java test class
+make test-cpp-one T=spin_lock_test     # run a single C++ test binary
+make run-demos-java     # run every Java demo's main() in sequence
+make run-demos-cpp      # run every C++ demo binary in sequence
+make run-benchmark-java # run QueueBenchmark (~1-2 min, not in run-demos-java)
+make run-benchmark-cpp  # run queue_benchmark (~1-2 min, not in run-demos-cpp)
+make clean              # remove all build output from both languages
+make help               # list every target
 ```
 `make help` lists every target. Tested with JDK 21 and g++ 13
-(C++20); see the Makefile for the exact underlying `javac`/`cmake`
-invocations if you need to reproduce a step by hand.
+(C++20); see the Makefile for the exact underlying `mvn`/`cmake`
+invocations if you need to reproduce a step by hand. The Java side
+compiles via Maven (`mvn compile`) and runs classes through the
+`exec-maven-plugin`; the C++ side uses CMake + Make + CTest. Both
+languages share a single top-level `build/` directory - C++ output
+goes to `build/cpp/`, Java output to `build/java/` - so `make clean`
+removes everything in one place. The Java suite has 14 test classes
+(the two negative tests run automatically as part of the regular
+suite); the C++ side has 11 regular test binaries plus 2 opt-in
+negative tests (gated behind `make test-cpp-negative` /
+`-DENABLE_TSAN_NEGATIVE_TESTS=ON`).
 
 
 What each suite actually checks (both languages test the same

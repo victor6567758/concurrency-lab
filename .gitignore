@@ -4,12 +4,14 @@
 .idea/
 *.iml
 
+# clangd / language server cache
+.cache/
+
 # CMake
-cmake-build-*/
+build/
 CMakeFiles/
 CMakeCache.txt
 compile_commands.json
-Makefile
 cmake_install.cmake
 CTestTestfile.cmake
 Testing/
@@ -37,12 +39,12 @@ build.ninja
 # Java
 # ======================================
 
-# Maven
+# Maven output now goes to project-root build/java/ (covered by the
+# top-level build/ rule above). Keep target/ in case of stray runs.
 target/
 
 # Gradle
 .gradle/
-build/
 
 # Eclipse
 .classpath
